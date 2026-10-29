@@ -1,0 +1,533 @@
+#include "timer_cfg.h"
+#include "stm32f4xx.h"
+
+
+/*
+ * ==============================================================
+ * TIM1 MOTOR PWM
+ * ==============================================================
+ *
+ * System:
+ *
+ * TIM1 clock = 84 MHz
+ *
+ * PSC = 0
+ * ARR = 4199
+ *
+ * PWM frequency:
+ *
+ * 84 MHz / 4200 = 20 kHz
+ *
+ * CH1 -> PA8  -> Left motor ENA
+ * CH4 -> PA11 -> Right motor ENB
+ */
+static void TIMER_MotorPWM_Init(void)
+{
+    RCC->APB2ENR |= RCC_APB2ENR_TIM1EN;
+
+    /*
+     * Stop timer while configuring.
+     */
+    TIM1->CR1 = 0U;
+
+    TIM1->PSC = 0U;
+
+    TIM1->ARR = 4199U;
+
+    /*
+     * Start motors disabled.
+     */
+    TIM1->CCR1 = 0U;
+    TIM1->CCR4 = 0U;
+
+
+    /*
+     * Channel 1:
+     *
+     * PWM mode 1 = OC1M 110.
+     *
+     * Enable preload.
+     */
+    TIM1->CCMR1 = 0U;
+
+    TIM1->CCMR1 |=
+        (6U << 4U);
+
+    TIM1->CCMR1 |=
+        TIM_CCMR1_OC1PE;
+
+
+    /*
+     * Channel 4:
+     *
+     * PWM mode 1.
+     */
+    TIM1->CCMR2 = 0U;
+
+    TIM1->CCMR2 |=
+        (6U << 12U);
+
+    TIM1->CCMR2 |=
+        TIM_CCMR2_OC4PE;
+
+
+    /*
+     * Enable CH1 and CH4 outputs.
+     */
+    TIM1->CCER = 0U;
+
+    TIM1->CCER |=
+        TIM_CCER_CC1E |
+        TIM_CCER_CC4E;
+
+
+    /*
+     * TIM1 is an advanced timer.
+     *
+     * MOE must be enabled before PWM
+     * reaches PA8 / PA11.
+     */
+    TIM1->BDTR |=
+        TIM_BDTR_MOE;
+
+
+    /*
+     * ARR preload.
+     */
+    TIM1->CR1 |=
+        TIM_CR1_ARPE;
+
+
+    /*
+     * Transfer preload registers.
+     */
+    TIM1->EGR =
+        TIM_EGR_UG;
+
+
+    /*
+     * Start TIM1.
+     */
+    TIM1->CR1 |=
+        TIM_CR1_CEN;
+}
+
+
+/*
+ * ==============================================================
+ * LEFT LM393 ENCODER
+ * ==============================================================
+ *
+ * PC6 -> TIM3_CH1
+ *
+ * Every rising edge from LM393 DO increments TIM3.
+ */
+static void TIMER_LeftEncoder_Init(void)
+{
+    RCC->APB1ENR |=
+        RCC_APB1ENR_TIM3EN;
+
+
+    /*
+     * Stop timer first.
+     */
+    TIM3->CR1 = 0U;
+
+    TIM3->SMCR = 0U;
+
+    TIM3->CCMR1 = 0U;
+
+    TIM3->CCER = 0U;
+
+
+    /*
+     * 16-bit free-running count.
+     */
+    TIM3->PSC = 0U;
+
+    TIM3->ARR = 0xFFFFU;
+
+    TIM3->CNT = 0U;
+
+
+    /*
+     * CC1S = 01.
+     *
+     * TIM3_CH1 becomes an input connected
+     * to TI1 / PC6.
+     */
+    TIM3->CCMR1 |=
+        (1U << 0U);
+
+
+    /*
+     * IC1F = 0011.
+     *
+     * Small digital filter to reject very
+     * short comparator noise spikes.
+     */
+    TIM3->CCMR1 |=
+        (3U << 4U);
+
+
+    /*
+     * Rising edge.
+     *
+     * CC1P remains zero.
+     */
+    TIM3->CCER |=
+        TIM_CCER_CC1E;
+
+
+    /*
+     * TS = 101:
+     *
+     * Trigger source = TI1FP1.
+     */
+    TIM3->SMCR |=
+        (5U << 4U);
+
+
+    /*
+     * SMS = 111:
+     *
+     * External Clock Mode 1.
+     *
+     * Each TI1FP1 edge clocks CNT.
+     */
+    TIM3->SMCR |=
+        (7U << 0U);
+
+
+    /*
+     * Generate update event.
+     */
+    TIM3->EGR =
+        TIM_EGR_UG;
+
+
+    /*
+     * Clear status flags.
+     */
+    TIM3->SR = 0U;
+
+
+    /*
+     * Enable counter.
+     */
+    TIM3->CR1 |=
+        TIM_CR1_CEN;
+}
+
+
+/*
+ * ==============================================================
+ * RIGHT LM393 ENCODER
+ * ==============================================================
+ *
+ * PB6 -> TIM4_CH1
+ */
+static void TIMER_RightEncoder_Init(void)
+{
+    RCC->APB1ENR |=
+        RCC_APB1ENR_TIM4EN;
+
+
+    TIM4->CR1 = 0U;
+
+    TIM4->SMCR = 0U;
+
+    TIM4->CCMR1 = 0U;
+
+    TIM4->CCER = 0U;
+
+
+    TIM4->PSC = 0U;
+
+    TIM4->ARR = 0xFFFFU;
+
+    TIM4->CNT = 0U;
+
+
+    /*
+     * CH1 configured as TI1 input.
+     */
+    TIM4->CCMR1 |=
+        (1U << 0U);
+
+
+    /*
+     * Small digital input filter.
+     */
+    TIM4->CCMR1 |=
+        (3U << 4U);
+
+
+    /*
+     * Enable CH1 input.
+     *
+     * Rising-edge polarity.
+     */
+    TIM4->CCER |=
+        TIM_CCER_CC1E;
+
+
+    /*
+     * TS = TI1FP1.
+     */
+    TIM4->SMCR |=
+        (5U << 4U);
+
+
+    /*
+     * External Clock Mode 1.
+     */
+    TIM4->SMCR |=
+        (7U << 0U);
+
+
+    TIM4->EGR =
+        TIM_EGR_UG;
+
+    TIM4->SR =
+        0U;
+
+
+    TIM4->CR1 |=
+        TIM_CR1_CEN;
+}
+
+
+/*
+ * ==============================================================
+ * TIM5 CONTROL LOOP TIMER
+ * ==============================================================
+ *
+ * APB1 timer clock = 84 MHz.
+ *
+ * PSC = 8399
+ *
+ * 84 MHz / 8400 = 10 kHz.
+ *
+ * ARR = 99
+ *
+ * 10 kHz / 100 = 100 Hz.
+ *
+ * Period = 10 ms.
+ */
+static void TIMER_ControlLoop_Init(void)
+{
+    RCC->APB1ENR |=
+        RCC_APB1ENR_TIM5EN;
+
+
+    TIM5->CR1 =
+        0U;
+
+
+    TIM5->PSC =
+        8399U;
+
+
+    TIM5->ARR =
+        99U;
+
+
+    TIM5->CNT =
+        0U;
+
+
+    /*
+     * Generate update so PSC/ARR become active.
+     */
+    TIM5->EGR =
+        TIM_EGR_UG;
+
+
+    /*
+     * Clear update flag generated by UG.
+     */
+    TIM5->SR &=
+        ~TIM_SR_UIF;
+
+
+    /*
+     * Start timer.
+     */
+    TIM5->CR1 |=
+        TIM_CR1_CEN;
+}
+
+
+/*
+ * ==============================================================
+ * PUBLIC TIMER INITIALIZATION
+ * ==============================================================
+ */
+void TIMER_Init(void)
+{
+    TIMER_MotorPWM_Init();
+
+    TIMER_LeftEncoder_Init();
+
+    TIMER_RightEncoder_Init();
+
+    TIMER_ControlLoop_Init();
+}
+
+
+/*
+ * RTOS build: FreeRTOS owns the 10 ms scheduler through SysTick.
+ * Keep the hardware timers used by the robot, but do not start TIM5.
+ */
+void TIMER_InitForRTOS(void)
+{
+    TIMER_MotorPWM_Init();
+
+    TIMER_LeftEncoder_Init();
+
+    TIMER_RightEncoder_Init();
+}
+
+
+/*
+ * ==============================================================
+ * LEFT MOTOR PWM
+ * ==============================================================
+ */
+void TIMER_SetLeftPWM(uint8_t duty_percent)
+{
+    if (duty_percent > 100U)
+    {
+        duty_percent = 100U;
+    }
+
+
+    /*
+     * ARR + 1 = 4200 counts.
+     *
+     * Example:
+     *
+     * 70% -> 2940.
+     */
+    TIM1->CCR1 =
+        ((uint32_t)(TIM1->ARR + 1U) *
+         duty_percent) /
+        100U;
+}
+
+
+/*
+ * ==============================================================
+ * RIGHT MOTOR PWM
+ * ==============================================================
+ */
+void TIMER_SetRightPWM(uint8_t duty_percent)
+{
+    if (duty_percent > 100U)
+    {
+        duty_percent = 100U;
+    }
+
+
+    TIM1->CCR4 =
+        ((uint32_t)(TIM1->ARR + 1U) *
+         duty_percent) /
+        100U;
+}
+
+
+/*
+ * ==============================================================
+ * 10 ms CONTROL EVENT
+ * ==============================================================
+ */
+uint8_t TIMER_ControlPeriodElapsed(void)
+{
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	if ((TIM5->SR & TIM_SR_UIF) != 0U)
+    {
+        /*
+         * Clear event after consuming it.
+         */
+        TIM5->SR &=
+            ~TIM_SR_UIF;
+
+        return 1U;
+    }
+
+    return 0U;
+}
+
+
+/*
+ * ==============================================================
+ * RAW ENCODER COUNTERS
+ * ==============================================================
+ */
+uint16_t TIMER_GetLeftEncoderCount(void)
+{
+    return (uint16_t)TIM3->CNT;
+}
+
+
+uint16_t TIMER_GetRightEncoderCount(void)
+{
+    return (uint16_t)TIM4->CNT;
+}
+
+
+void TIMER_ResetEncoderCounts(void)
+{
+    TIM3->CNT = 0U;
+
+    TIM4->CNT = 0U;
+}

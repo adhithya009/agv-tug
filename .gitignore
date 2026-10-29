@@ -1,0 +1,21 @@
+# STM32CubeIDE / Eclipse build directories and artifacts
+Debug/
+Release/
+*.elf
+*.bin
+*.hex
+*.map
+*.o
+*.d
+*.su
+*.cyclo
+
+# Eclipse temporary / cache
+.metadata/
+.recommenders/
+
+# OS files
+Thumbs.db
+.DS_Store
+*.swp
+*~
