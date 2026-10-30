@@ -1,6 +1,6 @@
 # AGV Tug - Full RTOS HardwareTests Integration
 
-This project was built from `AGV_Tug_Firmware_snow.zip` as the source of truth.
+This project was built from the original `AGV_Tug_Firmware_snow` package as the source of truth.
 The working navigation, map, motor, IR, RFID, obstacle, MPU and OLED drivers were not replaced by the older RTOS project's robot logic.
 
 ## Active HardwareTests test
